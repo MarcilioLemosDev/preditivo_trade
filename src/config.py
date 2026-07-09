@@ -6,7 +6,8 @@ import yaml
 
 DEFAULT_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 
-_REQUIRED_SECTIONS = ("symbols", "bars", "labeling", "features", "signals", "model", "ui", "storage")
+_REQUIRED_SECTIONS = ("prediction", "symbols", "bars", "labeling", "features", "signals",
+                      "model", "ui", "storage")
 
 
 def load_config(path: str | Path = DEFAULT_PATH) -> dict:

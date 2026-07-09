@@ -1,24 +1,56 @@
 # preditivo_trade
 
-**Modelo preditivo em tempo real para day trade** — acompanha múltiplos ativos no MetaTrader 5 em barras de 2 minutos, identifica padrões e estima, a cada barra fechada, a probabilidade do próximo movimento (subir, descer ou lateralizar), sugerindo momentos de entrada e saída numa janela compacta que não atrapalha a visão do trader.
+**Modelo preditivo em tempo real para day trade** — uma janelinha compacta que enxerga sozinha quais gráficos estão abertos no MetaTrader 5 e, a cada barra de 2 minutos, mostra a probabilidade do próximo movimento (subir, descer ou lateralizar) e sugere momentos de entrada e saída. Quem executa é sempre o humano.
 
 > ⚠️ **Aviso importante**: este software é uma ferramenta de estudo e apoio à decisão. Ele **não executa ordens** e **não é recomendação de investimento**. Resultados passados não garantem resultados futuros. Toda decisão de trade é do operador humano.
 
 ---
 
-## 1. Decisões de projeto (fechadas com o trader)
+## Como abrir o programa (guia do trader — sem parte técnica)
+
+**O que você precisa uma única vez (5 minutos):**
+
+1. Instale o Python: entre em [python.org/downloads](https://www.python.org/downloads/), baixe e execute o instalador. **Na primeira tela, marque a caixinha "Add python.exe to PATH"** e clique em *Install Now*.
+2. Baixe esta pasta do projeto para o computador (botão verde **Code → Download ZIP** no GitHub, e descompacte onde quiser — por exemplo na Área de Trabalho).
+
+**No dia a dia (sempre igual):**
+
+1. Abra o **MetaTrader 5** e deixe logado, com o gráfico do ativo que você vai operar na tela (pode abrir vários gráficos).
+2. Dê **dois cliques no arquivo `INICIAR.bat`** dentro da pasta do projeto.
+3. Pronto. A janelinha abre e faz o resto sozinha:
+   - **Descobre quais gráficos você abriu** no MT5 e passa a acompanhá-los. Abriu um gráfico novo? Ele entra na janelinha. Fechou? Ele sai.
+   - Na primeira vez que vê um ativo, aparece **"aprendendo"** — o programa está estudando o histórico em segundo plano (alguns minutos). Quando termina, vira **"pronto"**.
+   - A cada 2 minutos, atualiza as probabilidades de **ALTA / LATERAL / BAIXA** e a sugestão: **COMPRA**, **VENDA**, **SAIR**, **MANTER** ou **FORA**.
+4. Para encerrar, feche a janelinha.
+
+Na primeira execução o `INICIAR.bat` instala os componentes sozinho (precisa de internet e leva alguns minutos). Nas seguintes, abre direto.
+
+**Coisas boas de saber:**
+
+- **Zoom não importa.** O programa recebe os dados direto do MT5, não da imagem da tela. Dê zoom à vontade.
+- **"FORA" é o sinal mais comum — e está certo.** Em janelas de 2 minutos, na maior parte do tempo não há vantagem estatística. O programa só sugere entrada quando enxerga vantagem clara.
+- **Quer que a previsão olhe mais longe?** Abra o arquivo `config.yaml` no Bloco de Notas e mude `horizon_bars`: `1` = próximos 2 min, `2` = próximos 4 min, `3` = próximos 6 min... Salve e abra o programa de novo — ele aprende sozinho na nova janela.
+- Se algo der errado, a janela preta que abre junto mostra a mensagem — mande ela para o suporte (nós 🙂).
+
+*(Hoje o programa abre por esse duplo clique; um executável único `.exe` que dispensa até a instalação do Python está no roadmap — é um passo de empacotamento, não de funcionalidade.)*
+
+---
+
+## 1. Decisões de projeto
 
 | Decisão | Escolha |
 |---|---|
-| Plataforma | **MetaTrader 5** — dados direto da API oficial Python, sem ler a tela |
-| Ativos | NVDA, AMD, MSFT, GOOGL, Ouro (XAUUSD), BTCUSD, HK50 — configuráveis em `config.yaml` |
+| Plataforma | **MetaTrader 5** — dados direto da API oficial Python, sem ler imagem da tela |
+| Ativos | **Detecção automática dos gráficos abertos** no MT5 (NVDA, AMD, MSFT, GOOGL, XAUUSD, BTCUSD, HK50, ou qualquer outro que o trader abrir) |
 | Barra | 2 minutos (timeframe **M2 nativo** do MT5) |
+| Horizonte do insight | **Ajustável** em `config.yaml` (`prediction.horizon_bars`): h barras de 2 min à frente |
+| Treino | **Automático em segundo plano** na primeira vez que um ativo é visto |
 | Interface | Janelinha compacta sempre-no-topo (overlay), uma linha por ativo |
 | Execução | **Sempre humana** — o programa apenas sugere e explica |
 
-### Por que não precisamos de prints nem de zoom
+### Como o programa "vê a tela" sem ler pixels
 
-O MT5 entrega via API o histórico e o tempo real **completos, em precisão total, independente do zoom do gráfico**. O que o trader faz com zoom (micro = clareza do momento, macro = clareza do todo), o modelo faz com **janelas de análise simultâneas**: features micro (3, 5, 10 barras) capturam o momento e features macro (30, 60, 120 barras) capturam o contexto — as duas visões ao mesmo tempo, em toda barra. O trader pode dar zoom à vontade na tela dele: não afeta em nada o programa.
+A detecção dos gráficos abertos lê os **títulos das janelas** do MT5 via API do Windows (as janelas de gráfico chamam-se `SIMBOLO,TEMPO`, ex.: `XAUUSD,M2`). Já os **dados** (preços, barras) vêm da API oficial do MT5 — completos e em precisão total, independentes de zoom. A visão "macro e micro" do trader é reproduzida por **janelas de análise simultâneas**: features micro (3, 5, 10 barras) capturam o momento; features macro (30, 60, 120 barras) capturam o contexto.
 
 ---
 
@@ -27,32 +59,33 @@ O MT5 entrega via API o histórico e o tempo real **completos, em precisão tota
 | Conceito | Definição |
 |---|---|
 | **Barra** | Candle OHLC de **2 minutos**, alinhado ao relógio, fechado (a barra em formação nunca entra no pipeline). |
-| **Retorno-alvo** | `r = (close_t+1 − close_t) / close_t` — fechamento da **próxima** barra contra o da atual. |
+| **Horizonte h** | `prediction.horizon_bars` (1 = 2 min, 2 = 4 min, ...). Cada horizonte tem **modelo próprio** (`models/ATIVO_h{h}.joblib`) — prever 2 min e 6 min são tarefas diferentes. |
+| **Retorno-alvo** | `r = (close_t+h − close_t) / close_t` — fechamento h barras à frente contra o da barra atual. |
 | **ALTA** | `r > +θ` |
 | **BAIXA** | `r < −θ` |
 | **LATERAL** | `−θ ≤ r ≤ +θ` |
-| **Limiar θ** | **Adaptativo por ativo**: quantil (33%) dos \|retornos\| passados em janela móvel de 500 barras. BTC e MSFT têm volatilidades de mundos diferentes; o θ adaptativo mantém as 3 classes balanceadas em qualquer regime (verificado: 33/33/34 em teste). Modo `fixed` também disponível no `config.yaml`. |
-| **Horizonte** | Sempre **1 barra à frente** (2 minutos). |
-| **Gaps de sessão** | Barra seguida de gap (fim de pregão, feriado, buraco de feed) **não recebe rótulo** — o movimento seguinte dela não é um movimento de 2 minutos. Relevante para ações americanas e HK50; BTC roda 24/7. |
+| **Limiar θ** | **Adaptativo por ativo e por horizonte**: quantil (33%) dos \|retornos de h barras\| passados em janela móvel de 500 barras. Mantém as 3 classes balanceadas em qualquer regime de volatilidade (verificado: 33/33/34 em teste). Modo `fixed` disponível. |
+| **Gaps de sessão** | Barra cujo alvo cruza gap (fim de pregão, feriado, buraco de feed) **não recebe rótulo**. Relevante para ações americanas e HK50; BTC roda 24/7. |
 
 ### Regra de ouro anti-vazamento (look-ahead)
 
-Nenhuma feature da barra `t` usa informação posterior ao fechamento de `t`. Isso é **garantido por teste automatizado** (`tests/test_features.py::test_no_lookahead`): a feature calculada com o histórico truncado em `t` tem que ser idêntica à calculada com o dataset inteiro. Além disso, um teste de sanidade estatística treina o modelo em ruído puro (passeio aleatório) e falha se ele "vencer" o baseline — se um dia isso acontecer, é vazamento, não genialidade.
+Nenhuma feature da barra `t` usa informação posterior ao fechamento de `t`. **Garantido por teste automatizado** (`tests/test_features.py::test_no_lookahead`). Um segundo guarda-corpo treina o modelo em ruído puro (passeio aleatório) e falha se ele "vencer" o baseline — se acontecer, é vazamento, não genialidade.
 
 ---
 
 ## 3. Stack
 
-**Python 3.11+** (decisão fechada — sistema de tempo real, ecossistema de ML e API oficial do MT5).
+**Python 3.11+** (sistema de tempo real, ecossistema de ML e API oficial do MT5).
 
 | Camada | Ferramenta | Nota |
 |---|---|---|
 | Feed de dados | **MetaTrader5** (pacote oficial) | Windows, na máquina do terminal MT5 logado |
+| Detecção de gráficos | **ctypes/WinAPI** (títulos de janela) | zero dependências externas |
 | Dados | **pandas** + **numpy** | |
-| Indicadores | **implementados internamente** (`src/features.py`) | RSI, EMA, ATR, Bollinger etc. — sem dependência de libs de TA frágeis |
-| Modelo | **LightGBM** multiclasse + calibração isotônica | baseline de frequências enquanto não há modelo treinado |
+| Indicadores | **implementados internamente** (`src/features.py`) | RSI, EMA, ATR, Bollinger — sem libs de TA frágeis |
+| Modelo | **LightGBM** multiclasse + calibração isotônica | baseline de frequências enquanto não há modelo aprovado |
 | Validação | **scikit-learn** (walk-forward via TimeSeriesSplit) | |
-| UI | **tkinter** (overlay sempre-no-topo) | nativo do Python, zero instalação; modo console disponível |
+| UI | **tkinter** (overlay sempre-no-topo) | nativo do Python; modo console disponível |
 | Armazenamento | **CSV append-only** (`data/`) | auditável, resistente a queda; alimenta retreino e backtest |
 
 ---
@@ -71,89 +104,73 @@ O gerador de sinais (`src/signals.py`) só sugere quando há vantagem clara (lim
 ## 5. Arquitetura e estrutura do código
 
 ```
-MT5 (M2 ao vivo) ──► DataSource ──► SymbolPipeline (1 por ativo)
-                        │              features micro+macro ► modelo ► sinal
-Replay (CSV) ──────────┘              │
-                                       ├──► Overlay (janelinha) / console
-                                       └──► data/bars + data/signals (CSV)
+MT5 ──► chart_watch (janelas abertas) ──► app: 1 SymbolPipeline por gráfico
+  │                                             │
+  └──► MT5Source (barras M2 fechadas) ──────────┤  features micro+macro
+                                                 │  ► modelo (ou baseline)
+Replay (CSV) ► mesmo pipeline, p/ dev/simulação  │  ► sinal + explicação
+                                                 ├──► Overlay / console
+       trainer (thread em 2º plano,              └──► data/bars + data/signals
+       treina ao ver ativo novo) ◄───────────────┘
 ```
 
 ```
 preditivo_trade/
-├── config.yaml                  # TODOS os parâmetros de decisão
+├── INICIAR.bat                  # duplo clique do trader (instala e abre)
+├── config.yaml                  # parâmetros; trader só mexe em horizon_bars
 ├── requirements.txt
 ├── src/
 │   ├── config.py                # carga/validação da config
+│   ├── chart_watch.py           # detecção dos gráficos abertos no MT5
 │   ├── datasource/
 │   │   ├── base.py              # contrato DataSource + validação de barras
-│   │   ├── mt5_source.py        # MT5 ao vivo (M2 nativo)
+│   │   ├── mt5_source.py        # MT5 ao vivo (M2, símbolos dinâmicos)
 │   │   └── replay.py            # replay de histórico (dev, testes, simulação)
 │   ├── features.py              # features micro/macro, sem look-ahead
-│   ├── labeling.py              # ALTA/LATERAL/BAIXA com θ adaptativo + gaps
+│   ├── labeling.py              # ALTA/LATERAL/BAIXA, θ adaptativo, horizonte h
 │   ├── model.py                 # LightGBM calibrado + baseline de frequências
+│   ├── trainer.py               # treino (usado pelo app em 2º plano e pelo script)
 │   ├── signals.py               # regras de entrada/saída
 │   ├── pipeline.py              # orquestração por ativo
 │   ├── recorder.py              # gravação de barras e sinais
-│   ├── ui.py                    # overlay tkinter + console
-│   └── app.py                   # aplicativo principal
+│   ├── ui.py                    # overlay tkinter (linhas dinâmicas) + console
+│   └── app.py                   # aplicativo principal (detecção + auto-treino)
 ├── scripts/
-│   ├── download_history.py      # baixa histórico M2 do MT5
-│   └── train.py                 # treina/valida/salva modelo por ativo
-└── tests/                       # 19 testes, incluindo anti-look-ahead
+│   ├── check_setup.py           # diagnóstico do ambiente
+│   ├── download_history.py      # baixa histórico M2 em lote (uso avançado)
+│   └── train.py                 # retreino em lote com métricas (uso avançado)
+└── tests/                       # 25 testes, incluindo anti-look-ahead
 ```
 
 ---
 
-## 6. Como usar
-
-**Na máquina do trader (Windows, terminal MT5 aberto e logado):**
-
-Pré-requisitos: [Python 3.11+ 64 bits](https://www.python.org/downloads/) (marcar **"Add python.exe to PATH"** na instalação) e [Git](https://git-scm.com/download/win) — ou baixar o ZIP da branch no GitHub.
+## 6. Uso técnico (desenvolvedores)
 
 ```bash
-# 0. Obter o código
-git clone https://github.com/MarcilioLemosDev/preditivo_trade.git
-cd preditivo_trade
-git checkout claude/day-trader-predictor-mvp-obewol
-
-# 1. Instalar dependências
 pip install -r requirements.txt
+python -m pytest tests/                    # suíte completa (roda em qualquer SO)
+python scripts/check_setup.py              # diagnóstico do ambiente
 
-# 2. Diagnóstico: diz exatamente o que falta (conexão MT5, nomes dos
-#    símbolos na corretora com sugestões, histórico, modelos)
-python scripts/check_setup.py
-
-# 3. Corrigir o que o diagnóstico apontar (geralmente: nomes dos
-#    símbolos no config.yaml) e rodar de novo até ficar tudo [OK]
-
-# 4. Baixar histórico para treino (uma vez, e depois periodicamente)
-python scripts/download_history.py --bars 20000
-
-# 5. Treinar os modelos (só salva quem bater o baseline no walk-forward)
-python scripts/train.py
-
-# 6. Acompanhar em tempo real (abre a janelinha)
+# ao vivo (Windows + MT5 aberto) — o que o INICIAR.bat chama:
 python -m src.app --source mt5
-```
 
-**Desenvolvimento/simulação (qualquer sistema, sem MT5):**
-
-```bash
-python -m pytest tests/                                            # suíte completa
+# simulação com histórico gravado (qualquer SO):
 python -m src.app --source replay --replay-dir data/history --console --fast
-```
 
-Enquanto um ativo não tem modelo treinado (ou o modelo não bateu o baseline), o app roda com o **baseline de frequências** — que quase nunca dispara sinal, mas mantém o sistema gravando dados para o treino. Sem histórico, sem sinal: honestidade por construção.
+# fluxo em lote (opcional; o app treina sozinho em 2º plano):
+python scripts/download_history.py --bars 20000
+python scripts/train.py
+```
 
 ---
 
 ## 7. Validação e honestidade estatística
 
 1. **Walk-forward sempre**: treina no passado, testa no futuro (`TimeSeriesSplit`), nunca embaralha.
-2. **Gate de produção**: `scripts/train.py` só salva o modelo se ele **bater o baseline de frequências em log-loss** no walk-forward. Modelo que não bate baseline é ruído e é descartado (comportamento verificado em teste).
-3. **Calibração isotônica**: as probabilidades exibidas precisam significar o que dizem — "P(ALTA)=65%" tem que acertar ~65% das vezes.
-4. **Expectativa realista**: em barras de 2 min o mercado é muito ruidoso. Um modelo bem calibrado com ~55% de acerto direcional já é valioso. Acima de ~60%, desconfie de vazamento.
-5. Próxima etapa de validação: **backtest com custos** (spread, corretagem, slippage) sobre os sinais gravados.
+2. **Gate de produção**: o modelo (treinado pelo app ou pelo script) só entra em uso se **bater o baseline de frequências em log-loss** no walk-forward. Modelo que não bate é descartado e o ativo segue no modo básico (comportamento verificado em teste).
+3. **Calibração isotônica**: "P(ALTA)=65%" tem que acertar ~65% das vezes.
+4. **Expectativa realista**: em barras de 2 min o mercado é muito ruidoso. ~55% de acerto direcional bem calibrado já é valioso; acima de ~60%, desconfie de vazamento.
+5. Próxima etapa: **backtest com custos** (spread, corretagem, slippage) sobre os sinais gravados em `data/signals/`.
 
 ---
 
@@ -162,14 +179,8 @@ Enquanto um ativo não tem modelo treinado (ou o modelo não bateu o baseline), 
 | Fase | Entrega | Status |
 |---|---|---|
 | **0. Fundação** | Regras, arquitetura, README | ✅ |
-| **1. Esqueleto funcional** | DataSource MT5 + replay, features, rotulagem, modelo, sinais, overlay, testes | ✅ (este commit) |
-| **2. Dados reais** | Rodar `download_history.py` na máquina do trader, conferir símbolos, treinar primeiros modelos | 🔜 |
-| **3. Tempo real assistido** | Rodar 1 pregão inteiro ao vivo com log completo; ajustar θ e limiares | |
+| **1. Esqueleto funcional** | DataSource MT5 + replay, features, rotulagem, modelo, sinais, overlay, testes | ✅ |
+| **2. Experiência do usuário final** | Detecção automática de gráficos, auto-treino em 2º plano, horizonte ajustável, `INICIAR.bat` | ✅ (este commit) |
+| **3. Primeiro pregão real** | Rodar um dia inteiro na máquina do trader; validar detecção, sinais e logs | 🔜 |
 | **4. Backtest com custos** | Expectância financeira dos sinais descontando spread/corretagem/slippage | |
-| **5. Iteração** | SHAP nas decisões, novas features, avaliação lado a lado com o trader em paper trading | |
-
-## 9. Pendências para a Fase 2 (precisam do trader)
-
-1. **Nomes exatos dos símbolos na corretora** (na Observação de Mercado do MT5; alguns brokers usam sufixos: `NVDA.m`, `US_NVDA`...). Ajustar em `config.yaml`.
-2. Aumentar o limite de barras do terminal, se preciso: *Ferramentas → Opções → Gráficos → Máx. de barras no gráfico*.
-3. Rodar primeiro em **conta demo** para validar o fluxo ponta a ponta sem risco.
+| **5. Iteração** | SHAP nas decisões, novas features, avaliação lado a lado com o trader; empacotar `.exe` (PyInstaller) | |

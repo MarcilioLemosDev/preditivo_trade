@@ -41,6 +41,29 @@ def test_quantile_mode_balances_classes(ohlcv):
     assert (labels == 2).mean() > 0.15
 
 
+def test_horizon_two_bars_uses_close_two_ahead():
+    """horizon_bars=2: rótulo de t compara close de t+2 (janela de 4 min)."""
+    labels = make_labels(_tiny_frame(), CFG_FIXED, horizon_bars=2)
+    # closes: 100.0, 100.5, 100.4, 100.4, 99.0
+    # t=0: 100.4/100.0-1 = +0.4%  -> ALTA
+    # t=1: 100.4/100.5-1 = -0.0995% -> LATERAL
+    # t=2: 99.0/100.4-1 = -1.39% -> BAIXA
+    assert list(labels["label"].iloc[:3]) == [2.0, 1.0, 0.0]
+    # as duas últimas barras não têm alvo 2 barras à frente
+    assert labels["label"].iloc[3:].isna().all()
+
+
+def test_horizon_respects_session_gaps(ohlcv):
+    """Com h=3, as 3 últimas barras de cada sessão ficam sem rótulo."""
+    labels = make_labels(ohlcv, CFG_FIXED, horizon_bars=3)
+    step = ohlcv.index.to_series().diff().shift(-1)
+    last_of_session = step[step > pd.Timedelta(minutes=2)].index
+    for t in last_of_session:
+        pos = ohlcv.index.get_loc(t)
+        window = labels["label"].iloc[max(0, pos - 2): pos + 1]
+        assert window.isna().all(), f"barras antes do gap em {t} deveriam ficar sem rótulo"
+
+
 def test_label_uses_only_next_bar_return():
     """Mudar barras após t+1 não pode alterar o rótulo de t."""
     df = _tiny_frame()

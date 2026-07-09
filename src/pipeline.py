@@ -4,6 +4,9 @@ Cada ativo tem seu próprio estado (histórico, modelo, posição sugerida).
 Enquanto não existe modelo LightGBM treinado para o ativo, roda o
 baseline de frequências — que por construção quase nunca dispara sinal,
 mas mantém o sistema inteiro funcionando e gravando dados para o treino.
+
+A previsão sempre olha `horizon_bars` barras à frente (1 = 2 min,
+2 = 4 min...), conforme configurado pelo trader.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ class SymbolPipeline:
                  recorder: Recorder, model: DirectionModel | None = None):
         self.symbol = symbol
         self.cfg = cfg
+        self.horizon = int(cfg["prediction"]["horizon_bars"])
         self.df = history.copy()
         self.recorder = recorder
         self.model = model
@@ -32,14 +36,22 @@ class SymbolPipeline:
         # tamanho de histórico mantido em memória: o bastante p/ features + theta
         self._keep = max(
             warmup_bars(cfg["features"]["macro_windows"]),
-            cfg["labeling"]["window"] + 10,
+            cfg["labeling"]["window"] + self.horizon + 10,
         ) + 50
 
         # aquece o baseline com os rótulos do histórico carregado
         if len(self.df) > 100:
-            labels = make_labels(self.df, cfg["labeling"], cfg["bars"]["timeframe_minutes"])
+            labels = self._labels()
             for lbl in labels["label"].dropna():
                 self.baseline.update(int(lbl))
+
+    def _labels(self) -> pd.DataFrame:
+        return make_labels(self.df, self.cfg["labeling"],
+                           self.cfg["bars"]["timeframe_minutes"], self.horizon)
+
+    @property
+    def mode(self) -> str:
+        return "pronto" if self.model is not None else "básico"
 
     # ------------------------------------------------------------------
     def on_bar(self, bar: Bar) -> dict:
@@ -48,14 +60,15 @@ class SymbolPipeline:
         self.df = pd.concat([self.df, bar.as_row()]).tail(self._keep)
         self.df = self.df[~self.df.index.duplicated(keep="last")]
 
-        # com o fechamento desta barra, o rótulo da barra ANTERIOR ficou
+        # com o fechamento desta barra, o rótulo da barra t-h ficou
         # conhecido -> alimenta o baseline (aprendizado contínuo honesto)
-        labels = make_labels(self.df, self.cfg["labeling"], self.cfg["bars"]["timeframe_minutes"])
-        prev_label = labels["label"].iloc[-2] if len(labels) >= 2 else float("nan")
+        labels = self._labels()
+        idx = -(1 + self.horizon)
+        prev_label = labels["label"].iloc[idx] if len(labels) >= -idx else float("nan")
         if pd.notna(prev_label):
             self.baseline.update(int(prev_label))
 
-        # previsão para a PRÓXIMA barra usando só o que se sabe até agora
+        # previsão para h barras à frente usando só o que se sabe até agora
         feats = build_features(
             self.df,
             self.cfg["features"]["micro_windows"],
@@ -82,4 +95,5 @@ class SymbolPipeline:
             "probs": probs,
             "action": sig.action,
             "reason": sig.reason,
+            "mode": self.mode,
         }

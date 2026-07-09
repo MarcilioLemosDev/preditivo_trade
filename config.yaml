@@ -1,17 +1,28 @@
 # =============================================================
 # preditivo_trade — configuração central
 # Tudo que é parâmetro de decisão vive aqui, nunca no código.
+# O trader normalmente só precisa mexer em `prediction.horizon_bars`.
 # =============================================================
+
+# Janela futura do insight, em barras de 2 minutos:
+#   1 = próximos 2 min | 2 = próximos 4 min | 3 = próximos 6 min ...
+# Cada horizonte tem seu próprio modelo treinado (prever 2 min e 6 min
+# são tarefas diferentes). Ao mudar, o app aprende de novo sozinho.
+prediction:
+  horizon_bars: 1
 
 mt5:
   # Deixe vazio para usar o terminal MT5 já aberto e logado na máquina.
+  # Se houver mais de um MT5 instalado, aponte para o terminal64.exe.
   terminal_path: ""
   login: 0          # 0 = conta já logada no terminal
   password: ""
   server: ""
 
-# Nome lógico -> símbolo exato na sua corretora (confira na "Observação
-# de Mercado" do MT5; alguns brokers usam sufixos, ex.: NVDA.m, US_NVDA).
+# OPCIONAL: ao vivo, o programa detecta sozinho os gráficos abertos no
+# MT5 — não precisa listar nada aqui. Esta lista serve para os scripts
+# (download_history/train/replay) e para mapear apelido -> símbolo da
+# corretora quando quiser usar nomes lógicos.
 symbols:
   NVDA:  { mt5_symbol: "NVDA" }
   AMD:   { mt5_symbol: "AMD" }
@@ -24,12 +35,13 @@ symbols:
 bars:
   timeframe_minutes: 2     # barra de 2 minutos (M2 nativo do MT5)
   poll_seconds: 1.0        # frequência de checagem por barra fechada
+  chart_scan_seconds: 5    # frequência de detecção de gráficos abertos/fechados
   history_bars: 3000       # barras carregadas na partida (visão macro)
 
 labeling:
-  # quantile: theta adaptativo por ativo = quantil dos |retornos| passados,
-  #           mantém as 3 classes (ALTA/BAIXA/LATERAL) balanceadas em
-  #           qualquer regime de volatilidade (BTC e MSFT têm mundos diferentes).
+  # quantile: theta adaptativo por ativo E por horizonte = quantil dos
+  #           |retornos| passados, mantém as 3 classes (ALTA/BAIXA/
+  #           LATERAL) balanceadas em qualquer regime de volatilidade.
   # fixed:    theta fixo em % (fixed_theta_pct).
   mode: quantile
   lateral_quantile: 0.33   # ~1/3 das barras viram LATERAL
@@ -47,6 +59,8 @@ signals:
 
 model:
   dir: models
+  auto_train: true       # aprende sozinho ao ver um ativo novo (em 2º plano)
+  train_bars: 20000      # barras baixadas p/ o treino automático (~28 pregões)
   min_train_bars: 2000   # não treina com menos que isso
   calib_fraction: 0.2    # fatia final do treino reservada p/ calibração
 

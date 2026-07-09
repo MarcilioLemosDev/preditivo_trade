@@ -144,19 +144,32 @@ def check_mt5(cfg) -> None:
             fail(f"{name}: simbolo '{broker_symbol}' NAO existe nesta corretora", fix)
     mt5.shutdown()
 
+    title("Graficos abertos (deteccao automatica)")
+    try:
+        from src.chart_watch import detect_open_charts
+        charts = detect_open_charts()
+        if charts:
+            ok(f"detectados: {', '.join(charts)} — o app acompanhara esses ativos sozinho")
+        else:
+            print(WARN, "nenhum grafico aberto detectado — abra no MT5 o grafico "
+                        "do ativo que quer acompanhar antes de iniciar o app")
+    except Exception as exc:  # noqa: BLE001 - diagnostico
+        print(WARN, f"nao consegui detectar graficos: {exc}")
+
 
 def check_data_and_models(cfg) -> None:
     title("Historico e modelos")
+    from src.trainer import model_path
     data_dir = Path(cfg["storage"]["data_dir"])
-    model_dir = Path(cfg["model"]["dir"])
+    horizon = cfg["prediction"]["horizon_bars"]
+    print(f"  horizonte configurado: {horizon} barra(s) = "
+          f"proximos {horizon * cfg['bars']['timeframe_minutes']} min")
     for name in cfg["symbols"]:
         hist = data_dir / "history" / f"{name}.csv"
-        model = model_dir / f"{name}.joblib"
-        h = f"historico {'OK' if hist.exists() else 'ainda nao baixado'}"
-        m = f"modelo {'treinado' if model.exists() else 'ainda nao treinado (rodara no baseline)'}"
+        model = model_path(cfg["model"]["dir"], name, horizon)
+        h = f"historico {'OK' if hist.exists() else 'nao baixado'}"
+        m = f"modelo {'treinado' if model.exists() else 'sera treinado sozinho pelo app'}"
         print(("  [OK]   " if hist.exists() else "  [ .. ] "), f"{name}: {h} | {m}")
-    if not (data_dir / "history").exists():
-        print(WARN, "proximo passo: python scripts/download_history.py --bars 20000")
 
 
 def main() -> None:
