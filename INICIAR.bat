@@ -27,7 +27,7 @@ python -c "import pandas, numpy, sklearn, lightgbm, yaml, joblib" >nul 2>nul
 if errorlevel 1 (
   echo  Primeira execucao: preparando o programa, aguarde uns minutos...
   echo.
-  python -m pip install --quiet --disable-pip-version-warning -r requirements.txt
+  python -m pip install --disable-pip-version-check -r requirements.txt
   if errorlevel 1 (
     echo.
     echo  Nao consegui instalar os componentes. Verifique a internet e tente de novo.
