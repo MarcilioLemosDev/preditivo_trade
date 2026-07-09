@@ -1,0 +1,11 @@
+# Dados de mercado e modelos treinados nunca vão para o git
+data/
+models/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
