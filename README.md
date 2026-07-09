@@ -108,17 +108,31 @@ preditivo_trade/
 
 **Na máquina do trader (Windows, terminal MT5 aberto e logado):**
 
+Pré-requisitos: [Python 3.11+ 64 bits](https://www.python.org/downloads/) (marcar **"Add python.exe to PATH"** na instalação) e [Git](https://git-scm.com/download/win) — ou baixar o ZIP da branch no GitHub.
+
 ```bash
+# 0. Obter o código
+git clone https://github.com/MarcilioLemosDev/preditivo_trade.git
+cd preditivo_trade
+git checkout claude/day-trader-predictor-mvp-obewol
+
+# 1. Instalar dependências
 pip install -r requirements.txt
 
-# 1. Conferir em config.yaml os nomes exatos dos símbolos da corretora
-# 2. Baixar histórico para treino (uma vez, e depois periodicamente)
+# 2. Diagnóstico: diz exatamente o que falta (conexão MT5, nomes dos
+#    símbolos na corretora com sugestões, histórico, modelos)
+python scripts/check_setup.py
+
+# 3. Corrigir o que o diagnóstico apontar (geralmente: nomes dos
+#    símbolos no config.yaml) e rodar de novo até ficar tudo [OK]
+
+# 4. Baixar histórico para treino (uma vez, e depois periodicamente)
 python scripts/download_history.py --bars 20000
 
-# 3. Treinar os modelos (só salva quem bater o baseline no walk-forward)
+# 5. Treinar os modelos (só salva quem bater o baseline no walk-forward)
 python scripts/train.py
 
-# 4. Acompanhar em tempo real (abre a janelinha)
+# 6. Acompanhar em tempo real (abre a janelinha)
 python -m src.app --source mt5
 ```
 
