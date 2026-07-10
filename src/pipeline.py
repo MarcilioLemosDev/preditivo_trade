@@ -17,6 +17,7 @@ from .datasource.base import Bar
 from .features import build_features, warmup_bars
 from .labeling import make_labels
 from .model import DirectionModel, RollingPriorsModel
+from .paper_trader import PaperTrader, Seed
 from .recorder import Recorder
 from .signals import COMPRA, SAIR, VENDA, decide
 
@@ -32,6 +33,8 @@ class SymbolPipeline:
         self.model = model
         self.baseline = RollingPriorsModel(window=cfg["labeling"]["window"])
         self.position: str | None = None  # posição SUGERIDA (quem executa é o humano)
+        # simulação de operações (só interna); placar semeado do disco = cumulativo
+        self.paper = PaperTrader(symbol, cfg, seed=Seed(**recorder.trade_summary(symbol)))
 
         # tamanho de histórico mantido em memória: o bastante p/ features + theta
         self._keep = max(
@@ -89,6 +92,14 @@ class SymbolPipeline:
 
         self.recorder.record_signal(self.symbol, bar.time, bar.close, probs,
                                     sig.action, sig.reason)
+
+        # simulação de operações (paper trading) — não envia ordens
+        sim = self.paper.on_bar(bar.time, bar.close, probs)
+        for clip in self.paper.last_clips:
+            self.recorder.record_clip(clip)
+        if self.paper.last_closed is not None:
+            self.recorder.record_trade(self.paper.last_closed)
+
         return {
             "time": bar.time,
             "close": bar.close,
@@ -96,4 +107,5 @@ class SymbolPipeline:
             "action": sig.action,
             "reason": sig.reason,
             "mode": self.mode,
+            **sim,
         }

@@ -57,6 +57,28 @@ signals:
   margin: 0.25       # vantagem mínima P(ALTA) - P(BAIXA) (simétrico p/ venda)
   exit_prob: 0.55    # prob. contrária que sugere saída da posição
 
+# Simulador de operações (paper trading) exibido na janelinha. NÃO envia
+# ordens — só mede o desempenho do modelo em dólares. Os limiares de
+# entrada são MAIS altos que os de `signals` (seletividade): tradar menos
+# e melhor é a única forma honesta de perseguir a meta de winrate.
+simulation:
+  enabled: true
+  entry_prob: 0.62          # confiança mínima p/ ENTRAR uma operação simulada
+  entry_margin: 0.30        # vantagem mínima da direção vencedora sobre a oposta
+  partial_exit_prob: 0.45   # pressão contrária MODERADA -> vende um pedaço (parcial)
+  partial_fraction: 0.5     # fração do que resta vendida em cada saída parcial
+  exit_prob: 0.55           # pressão contrária FORTE -> zera o restante
+  min_hold_seconds: 40      # regra: não entrar e sair em menos de 40s
+  window_seconds: 600       # janela de 10 min: até 2 entradas e 2 saídas nela
+  max_entries_per_window: 2
+  max_exits_per_window: 2   # cada pedaço vendido conta como uma saída
+  max_hold_minutes: 10      # tempo máximo segurando a posição (5 barras de 2 min)
+  size_min_usd: 2000        # capital mínimo por operação
+  size_max_usd: 4000        # capital máximo por operação
+  cost_pct: 0.0             # custo por operação (spread+corretagem) em fração; 0 = só direção
+  goal_trades: 20           # meta avaliada ao atingir este nº de operações
+  goal_winrate: 0.68        # winrate-alvo (68%)
+
 model:
   dir: models
   auto_train: true       # aprende sozinho ao ver um ativo novo (em 2º plano)

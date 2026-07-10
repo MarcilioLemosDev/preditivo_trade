@@ -101,6 +101,34 @@ O gerador de sinais (`src/signals.py`) só sugere quando há vantagem clara (lim
 
 ---
 
+## 4b. Simulador de operações (paper trading)
+
+Dentro da própria janelinha, o modelo **simula** operações (nunca envia ordens) e mostra o desempenho em dólares. Colunas **OPS**, **WIN%** e **P&L US$** por ativo, mais uma linha **TOTAL**. Regras (todas em `config.yaml → simulation`):
+
+- **Entrada seletiva**: só entra com `P(direção) ≥ 62%` e vantagem `≥ 30%` sobre a contrária — mais exigente que os sinais exibidos. Tradar menos e melhor é a única alavanca **honesta** para perseguir a meta de winrate.
+- **Tamanho por operação**: de **US$ 2.000 a US$ 4.000**, proporcional à confiança do sinal.
+- **Saída parcial (scaling out)**: não precisa zerar de uma vez. Pressão contrária moderada (`≥ 45%`) vende um pedaço; pressão forte (`≥ 55%`) ou fim do prazo zera o restante.
+- **Até 2 entradas e 2 saídas por janela de 10 minutos** (cada pedaço conta como uma saída); **tempo mínimo de posição de 40 segundos**; **segura por até 10 minutos** (5 barras).
+- **Meta**: ao atingir **20 operações**, ter **winrate ≥ 68%**. Antes de 20, WIN% aparece em âmbar ("formando amostra"); em 20+, fica **verde** se ≥ 68% e **vermelho** se abaixo.
+
+> ⚠️ O winrate **não é forçado** — é medido. Se nem no ajuste mais seletivo ele chega a 68%, o veredito honesto é que o modelo ainda não é bom o bastante naquele ativo/horizonte. O simulador é o juiz que revela isso.
+
+### Histórico persistente e auditável
+
+Toda operação recebe um `op_id` único e é gravada em disco (persiste entre execuções); o placar (OPS/WIN%/P&L) é **cumulativo** — reinicia o app e continua de onde parou.
+
+- `data/trades/{ATIVO}.csv` — uma linha por **operação completa** (entrada, saída, nº de pedaços, P&L líquido).
+- `data/trades/{ATIVO}_clips.csv` — uma linha por **pedaço vendido** (parcial/final), para reconciliar.
+
+Para consultar depois e conferir se as saídas batem com o P&L relatado:
+
+```bash
+python scripts/historico.py                     # placar de todos os ativos
+python scripts/historico.py --symbol BTC --clips  # operação a operação, com a soma dos pedaços (confere: OK)
+```
+
+---
+
 ## 5. Arquitetura e estrutura do código
 
 ```
